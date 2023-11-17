@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt # type: ignore
 
 import casadi as ca # type: ignore
-
+import time
 from direct_multiple_shooting import MultipleShootingSolver
 import mpc_cost as cost
 
@@ -18,13 +18,13 @@ u_min = 1
 u_max = -1
 
 ### State bounds of the robot
-lin_vel_min = -0.5  # Vehicle contraint on the minimal velocity possible
+lin_vel_min = 0.0  # Vehicle contraint on the minimal velocity possible
 lin_vel_max = 1.5   # Vehicle contraint on the maximal velocity possible
 ang_vel_min = -0.5  # Vehicle contraint on the maximal angular velocity
 ang_vel_max = 0.5   # Vehicle contraint on the maximal angular velocity
 
 # Initial states
-x0 = [10, 0, ca.pi] 
+x0 = [8, 0, ca.pi] 
 
 #Define a static reference
 ref = ca.SX.sym('ref', 3, 1)
@@ -36,12 +36,23 @@ new_matrix = ca.vertcat(ref[0], ref[1],ref[2] )
 fun = ca.Function('fun', [ref], [new_matrix])
 
 # Define a specific 2x1 matrix as a reference
-static_ref =fun([0.0, 2.0, ca.pi])
+static_ref =fun([9.0, 8.0, ca.pi])
 
 
 print("reference:", static_ref)
 
+plt.ion()
+x, y = [], []
+fig, ax = plt.subplots()
+x, y = [],[]
+sc = ax.scatter(x,y)
+line1, = ax.plot(x,y,c='red', marker='.', linestyle=':')
+plt.xlim(0,10)
+plt.ylim(0,10)
 
+plt.draw()
+
+time.sleep(1)
 
 def unicycle_model(state: ca.SX, action: ca.SX, ts: float, rk4:bool=True) -> ca.SX:
     """Unicycle model.
@@ -75,14 +86,12 @@ def return_continuous_function(ns: int, nu: int) -> ca.Function:
     u = ca.SX.sym('u', nu)
     f = unicycle_model(x, u, ts)
     J_obj = cost.cost_refstate_deviation(x, static_ref)
-    print(J_obj)
     fk = ca.Function('fk', [x, u], [f, J_obj[0]+J_obj[1]])
     return fk
 
 
-state_traj_x = []
-state_traj_y = []
-for kt in range(10):
+
+for kt in range(40):
 
     # Define a symbolic continious function
     fc = return_continuous_function(ns, nu)
@@ -98,13 +107,23 @@ for kt in range(10):
                             [[10.0,10.0,2*ca.pi]]*(N+1))
     ms_solver.build_problem()
     sol = ms_solver.solve()
+    
+    x0 = [states[1] for states in ms_solver.get_pred_states(sol)]
+    
+    u_out = [output[0] for output in ms_solver.get_opt_controls(sol)]
+    
+    # Plots
+    state_traj_x = ms_solver.get_pred_states(sol)[0]
+    state_traj_y = ms_solver.get_pred_states(sol)[1]
 
-    u_out = ms_solver.get_opt_controls(sol)[0][:]
-    print(u_out)
-    x0 = unicycle_model(x0, u_out, ts)
-
-    state_traj_x.append(ms_solver.get_pred_states(sol)[0])
-    state_traj_y.append(ms_solver.get_pred_states(sol)[1])
+    sc.set_offsets(np.c_[x0[0],x0[1]])
+    line1.set_xdata(state_traj_x[1:])
+    line1.set_ydata(state_traj_y[1:])
+    
+    fig.canvas.draw_idle()
+    
+    plt.pause(0.2)
+    
 
     print(kt)
 
@@ -122,8 +141,5 @@ u2 = u_out[1]
 print("x1",x1_opt)
 print("u1", u1)
 print("u2",u2)
-
-
-
 """
 print('done')

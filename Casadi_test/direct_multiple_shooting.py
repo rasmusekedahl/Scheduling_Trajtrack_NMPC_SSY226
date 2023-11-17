@@ -197,7 +197,8 @@ class MultipleShootingSolver:
         self._built = True
         return self.problem
 
-    def solve(self, solver_type:str='ipopt', solver_options:Optional[dict]=None,
+    # Solver option will supress printout from the solver if not None
+    def solve(self, solver_type:str='ipopt', solver_options:Optional[dict]={'ipopt.print_level':0, 'print_time':0},
               build_kwargs:Optional[dict]=None, run_kwargs:Optional[dict]=None) -> dict:
         """Solve the NLP problem.
         
