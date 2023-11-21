@@ -225,10 +225,12 @@ class MultipleShootingSolver:
         solver = ca.nlpsol('solver', solver_type, problem, solver_options, **build_kwargs)
         sol: dict = solver(lbx=self.problem['lbx'], ubx=self.problem['ubx'],
                            lbg=self.problem['lbg'], ubg=self.problem['ubg'], **run_kwargs)
-        stats = solver.stats()
-        time = stats['t_wall_total']
-        exit_status = stats['return_status']
-        sol_cost = sol['f']
+        
+        sol_stats = solver.stats()
+        time = 1000*sol_stats['t_wall_total']
+        exit_status = sol_stats['return_status']
+        sol_cost = float(sol['f'])
+        print(type(sol_cost))
         return sol, time, exit_status, sol_cost
     
     def get_pred_states(self, sol: dict) -> list[list[float]]:
@@ -321,7 +323,6 @@ if __name__ == '__main__':
     ms_solver.build_problem()
     sol = ms_solver.solve()
 
-    
     # Plot the solution
     u_opt = ms_solver.get_opt_controls(sol)
     x_pred = ms_solver.get_pred_states(sol)

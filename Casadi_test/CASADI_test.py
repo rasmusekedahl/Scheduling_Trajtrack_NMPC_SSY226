@@ -91,7 +91,7 @@ def return_continuous_function(ns: int, nu: int) -> ca.Function:
 
 
 
-for kt in range(40):
+for kt in range(5):
 
     # Define a symbolic continious function
     fc = return_continuous_function(ns, nu)
@@ -106,7 +106,11 @@ for kt in range(40):
     ms_solver.set_state_bound([[0.0,0.0,0.0]]*(N+1), 
                             [[10.0,10.0,2*ca.pi]]*(N+1))
     ms_solver.build_problem()
-    sol = ms_solver.solve()
+    sol, sol_time, sol_exit_status, solver_cost = ms_solver.solve()
+    
+    print(sol_time)
+    print(sol_exit_status)
+    print(solver_cost)
     
     x0 = [states[1] for states in ms_solver.get_pred_states(sol)]
     
@@ -122,11 +126,10 @@ for kt in range(40):
     
     fig.canvas.draw_idle()
     
-    plt.pause(0.2)
+    plt.pause(ts)
     
 
     print(kt)
-
 
 """
 x_pred = ms_solver.get_pred_states(sol)

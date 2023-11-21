@@ -8,6 +8,7 @@ import numpy as np
 from configs import MpcConfiguration, CircularRobotSpecification
 # Type hint
 from typing import Callable, List
+from pkg_mpc_tracker.Casadi_solver import CasadiSolver
 
 
 class Solver(): # this is not found in the .so file (in ternimal: nm -D  navi_test.so)
@@ -42,6 +43,7 @@ class TrajectoryTracker:
         self.ns = self.config.ns
         self.nu = self.config.nu
         self.N_hor = self.config.N_hor
+        self.solver_type = self.config.solver_type
 
         # Initialization
         self._idle = True
@@ -279,13 +281,18 @@ class TrajectoryTracker:
         if self.use_tcp:
             return self.run_solver_tcp(parameters, state, take_steps)
 
-        import opengen as og
-        solution:og.opengen.tcp.solver_status.SolverStatus = self.solver.run(parameters)
-        
-        u           = solution.solution
-        cost        = solution.cost
-        exit_status = solution.exit_status
-        solver_time = solution.solve_time_ms
+        if self.solver_type == 'PANOC':
+            import opengen as og
+            solution:og.opengen.tcp.solver_status.SolverStatus = self.solver.run(parameters)
+            
+            u           = solution.solution
+            cost        = solution.cost
+            exit_status = solution.exit_status
+            solver_time = solution.solve_time_ms
+            
+        elif self.solver_type == 'Casadi':
+            cas_solver = CasadiSolver(self.config,self.robot_spec,parameters)
+            u, cost, exit_status, solver_time = cas_solver.run()
         
         taken_states:List[np.ndarray] = []
         for i in range(take_steps):

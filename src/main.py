@@ -19,7 +19,7 @@ from visualizer.mpc_plot import MpcPlotInLoop
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parents[1]
 # DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
-DATA_DIR = os.path.join(ROOT_DIR, "data", "schedule_demo1_data")
+DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
 CNFG_DIR = os.path.join(ROOT_DIR, "config")
 VB = False
 TIMEOUT = 1000

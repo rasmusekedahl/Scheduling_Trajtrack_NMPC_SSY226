@@ -114,4 +114,5 @@ class MpcConfiguration(_Configuration):
         self.qdynobs = config.qdynobs                   # Cost for dynamic obstacle avoidance
         self.qpN = config.qpN                           # Terminal cost; error relative to final reference position       
         self.qthetaN = config.qthetaN                   # Terminal cost; error relative to final reference heading
+        self.solver_type = config.solver_type           # Determines which solver to use (PANOC or Casadi)
 
