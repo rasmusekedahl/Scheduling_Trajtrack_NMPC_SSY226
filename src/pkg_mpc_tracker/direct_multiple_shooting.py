@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt # type: ignore
 import casadi as ca # type: ignore
 
 from typing import Callable, Union, Optional, Any, cast
+from pkg_mpc_tracker.build import mpc_cost
+from basic_motion_model import motion_model
+
+
 
 '''
 This is used for solving problems with a horizon.
@@ -29,7 +33,7 @@ class MultipleShootingSolver:
         A variable with a subscript `_i` means it is a symbol, not a value (e.g. `x_0`).
         A variable with a number `i` means it is a value, not a symbol (e.g. `x0`). 
     """
-    def __init__(self, ns: int, nu: int, ts: float, horizon: int) -> None:
+    def __init__(self, ns: int, nu: int, ts: float, horizon: int, config) -> None:
         """
         Arguments:
             ns: number of states
@@ -40,6 +44,7 @@ class MultipleShootingSolver:
         self._nu = nu
         self._ts = ts
         self._N = horizon
+        self.config = config
 
         self._create_placeholders()
         self._x0: Any = None
@@ -150,6 +155,52 @@ class MultipleShootingSolver:
             raise RuntimeError("The problem has already been built. Cannot add more constraints.")
         self._ineq_func_list.append(func)
 
+    def cost_calculation(self):
+
+        #u = ca.SX.sym('u', self.nu*self.N)  # 0. Inputs from 0 to N_hor-1
+
+        u_m1 = ca.SX.sym('u_m1', self.nu)       # 1. Input at kt=-1
+        s_0 = ca.SX.sym('s_0', self.ns)         # 2. State at kt=0
+        s_N = ca.SX.sym('s_N', self.ns)         # 3. State of goal at kt=N_hor
+        q = ca.SX.sym('q', self.config.nq)      # 4. Penalty parameters for objective terms
+        r_s = ca.SX.sym('r_s', self.ns*self.N)  # 5. Reference states
+        r_v = ca.SX.sym('r_v', self.N)          # 6. Reference speed
+        c_0 = ca.SX.sym('c_0', self.ns*self.config.Nother)          # 7. States of other robots at kt=0
+        c = ca.SX.sym('c', self.ns*self.N*self.config.Nother)   # 8. Predicted states of other robots
+        o_s = ca.SX.sym('os', self.config.Nstcobs*self.config.nstcobs)                  # 9. Static obstacles
+        o_d = ca.SX.sym('od', self.config.Ndynobs*self.config.ndynobs*(self.N+1))   # 10. Dynamic obstacles
+        q_stc = ca.SX.sym('qstc', self.N)               # 11. Static obstacle weights
+        q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
+
+        self._w_list.append(ca.vertcat(r_s))
+        
+        (x, y, theta) = (s_0[0], s_0[1], s_0[2])
+        (x_goal, y_goal, theta_goal) = (s_N[0], s_N[1], s_N[2])
+        (v_init, w_init) = (u_m1[0], u_m1[1])
+        (qpos, qvel, qtheta, rv, rw)                    = (q[0], q[1], q[2], q[3], q[4])
+        (qN, qthetaN, qrpd, acc_penalty, w_acc_penalty) = (q[5], q[6], q[7], q[8], q[9])
+        
+        ref_states = ca.reshape(r_s, (self.ns, self.N)).T
+        ref_states = ca.vertcat(ref_states, ref_states[[-1],:])[:, :2] #Remove theta
+
+
+        cost = 0
+        penalty_constraints = 0
+        state = ca.vcat([x,y,theta])
+
+        for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
+            state = ca.SX.sym('x_' + str(kt+1), self._ns)
+            u_t = ca.SX.sym('u_' + str(kt), self._nu)
+            ### Run step with motion model
+            #u_t = u[kt*self.nu:(kt+1)*self.nu]  # inputs at time t
+            state = self._f_func(state, u_t, self.ts) # Kinematic/dynamic model
+
+            ### Reference deviation costs
+            cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:,:], weight=qvel)        
+        
+
+        return cost
+
     def build_problem(self) -> dict:
         """Build the NLP problem in the form of multiple shooting.
         
@@ -170,7 +221,8 @@ class MultipleShootingSolver:
         for k in range(self._N):
             x_next = ca.SX.sym('x_' + str(k+1), self._ns)
             u_k = ca.SX.sym('u_' + str(k), self._nu)
-            x_next_hat, J_k = self._f_func(x_k, u_k)
+            #x_next_hat, J_k = self._f_func(x_k, u_k)
+            x_next_hat = self._f_func(x_next,u_k,self.ts)
 
             self._w_list += [u_k, x_next]
             self._lbw_list += self._lbu[k] + self._lbx[k+1]
@@ -185,9 +237,10 @@ class MultipleShootingSolver:
                 self._lbh_list += [-ca.inf]
                 self._ubh_list += [0]
 
-            J += J_k
+           
             x_k = x_next
-            
+        
+        J = self.cost_calculation()
         constraint_list = self._g_list + self._h_list
         constraint_lb_list = self._lbg_list + self._lbh_list
         constraint_ub_list = self._ubg_list + self._ubh_list
