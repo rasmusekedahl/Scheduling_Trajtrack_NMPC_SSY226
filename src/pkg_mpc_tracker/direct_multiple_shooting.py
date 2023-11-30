@@ -50,7 +50,6 @@ class MultipleShootingSolver:
         self.config = config
         self.robot_config = robot_specification
 
-
         self._create_placeholders()
         self._x0: Any = None
         self._f_func: Any = None
@@ -177,7 +176,9 @@ class MultipleShootingSolver:
         q_stc = ca.SX.sym('qstc', self.N)               # 11. Static obstacle weights
         q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
 
-        self._w_list.append(ca.vertcat(r_s))
+        # Set parameter list for the Casadi solver
+        self.param = ca.vertcat(u_m1, s_0, s_N, q, r_s, r_v, c_0, c, o_s, o_d, q_stc, q_dyn)
+        #self._w_list.append(ca.vertcat(r_s))
         
         (x, y, theta) = (s_0[0], s_0[1], s_0[2])
         (x_goal, y_goal, theta_goal) = (s_N[0], s_N[1], s_N[2])
@@ -188,17 +189,16 @@ class MultipleShootingSolver:
         ref_states = ca.reshape(r_s, (self.ns, self.N)).T
         ref_states = ca.vertcat(ref_states, ref_states[[-1],:])[:, :2] #Remove theta
 
-
         cost = 0
         penalty_constraints = 0
         state = ca.vcat([x,y,theta])
-
         for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
             state = ca.SX.sym('x_' + str(kt+1), self._ns)
             u_t = ca.SX.sym('u_' + str(kt), self._nu)
+            
             ### Run step with motion model
             #u_t = u[kt*self.nu:(kt+1)*self.nu]  # inputs at time t
-            state = self._f_func(state, u_t) # Kinematic/dynamic model
+            state = self._f_func(state, u_t, self.ts) # Kinematic/dynamic model
 
             ### Reference deviation costs
             cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
@@ -231,7 +231,6 @@ class MultipleShootingSolver:
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
 
                 cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=q_stc[kt])
-
             ### Dynamic obstacles
             # x_dyn     = o_d[0::self.config.ndynobs*(self.N_hor+1)]
             # y_dyn     = o_d[1::self.config.ndynobs*(self.N_hor+1)]
@@ -293,7 +292,6 @@ class MultipleShootingSolver:
         # Accelerations cost
         cost += ca.mtimes(acc.T, acc)*acc_penalty
         cost += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
-
         
 
         return cost
@@ -310,6 +308,8 @@ class MultipleShootingSolver:
         self._lbw_list += self._lbx[0]
         self._ubw_list += self._ubx[0]
         self._g_list.append(self._w_list[0] - self._x0)
+        print(self._w_list[0])
+        print(self._x0)
         self._lbg_list += [0]*self._ns
         self._ubg_list += [0]*self._ns
 
@@ -319,7 +319,9 @@ class MultipleShootingSolver:
             x_next = ca.SX.sym('x_' + str(k+1), self._ns)
             u_k = ca.SX.sym('u_' + str(k), self._nu)
             #x_next_hat, J_k = self._f_func(x_k, u_k)
-            x_next_hat = self._f_func(x_k,u_k)
+            #x_next_hat = self._f_func(x_k,u_k)
+            fk = ca.Function('x_next_hat', [x_k,u_k], [self._f_func(x_k,u_k,self.ts)])
+            x_next_hat = fk(x_k,u_k)
 
             self._w_list += [u_k, x_next]
             self._lbw_list += self._lbu[k] + self._lbx[k+1]
@@ -341,7 +343,9 @@ class MultipleShootingSolver:
         constraint_list = self._g_list + self._h_list
         constraint_lb_list = self._lbg_list + self._lbh_list
         constraint_ub_list = self._ubg_list + self._ubh_list
-        self.problem = {'f': J, 'x': ca.vertcat(*self._w_list), 'g': ca.vertcat(*constraint_list),
+        
+        # Added parameters to problem definition
+        self.problem = {'f': J, 'x': ca.vertcat(*self._w_list), 'g': ca.vertcat(*constraint_list), 'p': self.param,
                         'lbx': self._lbw_list, 'ubx': self._ubw_list,
                         'lbg': constraint_lb_list, 'ubg': constraint_ub_list}
         self._built = True
@@ -363,7 +367,7 @@ class MultipleShootingSolver:
         if not self._built:
             self.build_problem()
         self.problem = cast(dict, self.problem)
-        problem = {k: self.problem[k] for k in ('f', 'x', 'g')}
+        problem = {k: self.problem[k] for k in ('f', 'x', 'g', 'p')}
             
         if solver_options is None:
             solver_options = {}
