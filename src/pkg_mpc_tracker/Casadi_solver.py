@@ -20,7 +20,7 @@ class CasadiSolver:
         self.ts = self.config.ts    #Sample time
 
         ### State bounds of the robot
-        self.lin_vel_min = self.robot_spec.lin_vel_min  # Vehicle contraint on the minimal velocity possible
+        self.lin_vel_min = self.robot_spec.lin_vel_min   # Vehicle contraint on the minimal velocity possible
         self.lin_vel_max = self.robot_spec.ang_vel_max   # Vehicle contraint on the maximal velocity possible
         self.ang_vel_min = -self.robot_spec.ang_vel_max  # Vehicle contraint on the maximal angular velocity
         self.ang_vel_max = self.robot_spec.ang_vel_max   # Vehicle contraint on the maximal angular velocity
@@ -114,31 +114,25 @@ class CasadiSolver:
 
         return cost
 
-    """"
+    
     def return_continuous_function(self) -> cs.Function:
-        
-        xc: x1 - distance [km], x2 - speed [km/h]
-        uc: uc_neg & uc_pos, actuator acceleration [m/s^2]
         
         x = cs.SX.sym('x', self.ns)
         u = cs.SX.sym('u', self.nu)
         f = self.unicycle_model(x, u, self.ts)
-        #J_obj = self.cost_calculation()#mpc_cost.cost_refstate_deviation(x, self.static_ref) 
-        #J_obj = J_obj[0]+J_obj[1]+J_obj[2]
-        #print("J_obj", J_obj)
-         # Taking 2 first states
-        #fk = cs.Function('fk', [x,u], [f])
-        return f
-    """
+       
+        fk = cs.Function('fk', [x,u], [f], {"allow_free":True})
+        return fk
+    
 
     def run(self):
         # Define a symbolic continious function
-        #fk = self.return_continuous_function()
+        fk = self.return_continuous_function()
 
         # Discretize the continious function 
-        ms_solver = MultipleShootingSolver(self.ns, self.nu, self.ts, self.N, self.config)
+        ms_solver = MultipleShootingSolver(self.ns, self.nu, self.ts, self.N, self.config,self.robot_spec)
         ms_solver.set_initial_state(self.x0)
-        ms_solver.set_motion_model(self.unicycle_model)
+        ms_solver.set_motion_model(fk,c2d=False)
 
         # Define state and output bounds
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
