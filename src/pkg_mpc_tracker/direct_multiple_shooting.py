@@ -164,7 +164,7 @@ class MultipleShootingSolver:
         #u = ca.SX.sym('u', self.nu*self.N)  # 0. Inputs from 0 to N_hor-1
 
         u_m1 = ca.SX.sym('u_m1', self.nu)       # 1. Input at kt=-1
-        s_0 = ca.SX.sym('s_0', self.ns)         # 2. State at kt=0
+        #s_0 = ca.SX.sym('s_0', self.ns)         # 2. State at kt=0
         s_N = ca.SX.sym('s_N', self.ns)         # 3. State of goal at kt=N_hor
         q = ca.SX.sym('q', self.config.nq)      # 4. Penalty parameters for objective terms
         r_s = ca.SX.sym('r_s', self.ns*self.N)  # 5. Reference states
@@ -177,10 +177,10 @@ class MultipleShootingSolver:
         q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
 
         # Set parameter list for the Casadi solver
-        self.param = ca.vertcat(u_m1, s_0, s_N, q, r_s, r_v, c_0, c, o_s, o_d, q_stc, q_dyn)
+        self.param = ca.vertcat(u_m1, s_N, q, r_s, r_v, c_0, c, o_s, o_d, q_stc, q_dyn)
         #self._w_list.append(ca.vertcat(r_s))
         
-        (x, y, theta) = (s_0[0], s_0[1], s_0[2])
+        #(x, y, theta) = (s_0[0], s_0[1], s_0[2])
         (x_goal, y_goal, theta_goal) = (s_N[0], s_N[1], s_N[2])
         (v_init, w_init) = (u_m1[0], u_m1[1])
         (qpos, qvel, qtheta, rv, rw)                    = (q[0], q[1], q[2], q[3], q[4])
@@ -191,14 +191,16 @@ class MultipleShootingSolver:
 
         cost = 0
         penalty_constraints = 0
-        state = ca.vcat([x,y,theta])
+        #state = ca.vcat([x,y,theta])
         for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
-            state = ca.SX.sym('x_' + str(kt+1), self._ns)
-            u_t = ca.SX.sym('u_' + str(kt), self._nu)
+            #state = ca.SX.sym('x_' + str(kt+1), self._ns)
+            state_vec = self._w_list[2*kt]
+            #u_t = ca.SX.sym('u_' + str(kt), self._nu)
+            u_t = self._w_list[2*kt+1]
             
             ### Run step with motion model
             #u_t = u[kt*self.nu:(kt+1)*self.nu]  # inputs at time t
-            state = self._f_func(state, u_t, self.ts) # Kinematic/dynamic model
+            state = self._f_func(state_vec, u_t, self.ts) # Kinematic/dynamic model
 
             ### Reference deviation costs
             cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
