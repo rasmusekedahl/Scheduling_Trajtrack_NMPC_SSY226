@@ -18,10 +18,11 @@ class CasadiSolver:
         self.nu = self.config.nu     #Noumber of inputs
         self.N = self.config.N_hor   #Control horizon
         self.ts = self.config.ts    #Sample time
+        self.params = params
 
         ### State bounds of the robot
         self.lin_vel_min = self.robot_spec.lin_vel_min   # Vehicle contraint on the minimal velocity possible
-        self.lin_vel_max = self.robot_spec.ang_vel_max   # Vehicle contraint on the maximal velocity possible
+        self.lin_vel_max = self.robot_spec.lin_vel_max   # Vehicle contraint on the maximal velocity possible
         self.ang_vel_min = -self.robot_spec.ang_vel_max  # Vehicle contraint on the maximal angular velocity
         self.ang_vel_max = self.robot_spec.ang_vel_max   # Vehicle contraint on the maximal angular velocity
 
@@ -29,20 +30,7 @@ class CasadiSolver:
         self.x0 = params[2:5]
         self.ref_state = params[5:8]
         
-        #Define a static reference
-        ref = cs.SX.sym('ref', 3, 1)
-
-        # Create an expression using the symbolic matrix
-        new_matrix = cs.vertcat(ref[0], ref[1],ref[2] )
-
-        # Create a CasADi Function
-        fun = cs.Function('fun', [ref], [new_matrix])
-
-        # Define a specific 2x1 matrix as a reference
-        self.static_ref =fun(self.ref_state)
-
-
-        print("reference:", self.static_ref)
+       
 
 
     def unicycle_model(self, state: cs.SX, action: cs.SX, ts: float, rk4:bool=True) -> cs.SX:
@@ -86,12 +74,15 @@ class CasadiSolver:
         ms_solver = MultipleShootingSolver(self.ns, self.nu, self.ts, self.N, self.config,self.robot_spec)
         ms_solver.set_initial_state(self.x0)
         ms_solver.set_motion_model(self.unicycle_model,c2d=False)
+        ms_solver.set_parameters(self.params)
+        
 
         # Define state and output bounds
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
         ms_solver.set_state_bound([[0.0,0.0,0.0]]*(self.N+1), 
                                 [[20.0,20.0,2*cs.pi]]*(self.N+1))
         ms_solver.build_problem()
+
         sol, solver_time, exit_status, solver_cost = ms_solver.solve()
 
         u_out = [output[0] for output in ms_solver.get_opt_controls(sol)]

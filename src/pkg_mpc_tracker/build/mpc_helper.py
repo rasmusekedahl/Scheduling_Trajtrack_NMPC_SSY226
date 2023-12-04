@@ -67,7 +67,7 @@ def inside_cvx_polygon(point: cs.SX, b: cs.SX, a0: cs.SX, a1: cs.SX):
         Each half-space is defined as `b - [a0,a1]*[x,y]' > 0`.
         If prod(|max(0,all)|)>0, then the point is inside; Otherwise not.
     """
-    eq_mtx: cs.SX = cs.vertcat(b, -a0, -a1)
+    eq_mtx: cs.SX = cs.vertcat(b, -a0, -a1) #Rewrite to 4x3
     result: cs.SX = cs.mtimes(eq_mtx.T, cs.vertcat(1, point[0], point[1]))
     is_inside = 1
     for i in range(result.shape[0]):

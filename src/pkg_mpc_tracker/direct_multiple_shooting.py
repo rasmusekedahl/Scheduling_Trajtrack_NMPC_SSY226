@@ -105,6 +105,14 @@ class MultipleShootingSolver:
     def set_initial_state(self, x0: list[float]) -> None:
         self._x0 = x0
 
+    def set_ref_states(self, ref_states: np.ndarray) -> np.ndarray:
+        """Set the local reference states for the coming time step.
+
+        Arguments:
+            ref_states: Local (within the horizon) reference states
+        """
+        self.ref_states = ref_states
+
     def set_state_bound(self, lbx: list, ubx: list) -> None:
         """Set the lower and upper bounds of the states.
         
@@ -159,8 +167,21 @@ class MultipleShootingSolver:
             raise RuntimeError("The problem has already been built. Cannot add more constraints.")
         self._ineq_func_list.append(func)
 
-    def cost_calculation(self):
+    def set_parameters(self,params):
+        self.u_m1= params[0:2]  # Input at kt=-1
+        self.s_0 = params[2:5]  # State at kt=0
+        self.s_N = params[5:8]  # State of goal at kt=N_hor
+        self.q = params[8:18]   # Penalty parameters for objective terms
+        self.r_s = params[18:78] # Reference states
+        self.r_v = params[78:98] # Reference speed
+        self.c_0 = params[98:128]      # States of other robots at kt=0
+        self.c = params[98:728]        # Predicted states of other robots
+        self.o_s = params[728:848]     # Static obstacles
+        self.q_stc = params[848:]      # Static obstacle weights
 
+
+    def cost_calculation(self):
+        '''
         #u = ca.SX.sym('u', self.nu*self.N)  # 0. Inputs from 0 to N_hor-1
 
         u_m1 = ca.SX.sym('u_m1', self.nu)       # 1. Input at kt=-1
@@ -172,22 +193,22 @@ class MultipleShootingSolver:
         c_0 = ca.SX.sym('c_0', self.ns*self.config.Nother)          # 7. States of other robots at kt=0
         c = ca.SX.sym('c', self.ns*self.N*self.config.Nother)   # 8. Predicted states of other robots
         o_s = ca.SX.sym('os', self.config.Nstcobs*self.config.nstcobs)                  # 9. Static obstacles
-        o_d = ca.SX.sym('od', self.config.Ndynobs*self.config.ndynobs*(self.N+1))   # 10. Dynamic obstacles
+        #o_d = ca.SX.sym('od', self.config.Ndynobs*self.config.ndynobs*(self.N+1))   # 10. Dynamic obstacles
         q_stc = ca.SX.sym('qstc', self.N)               # 11. Static obstacle weights
-        q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
-
+        #q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
+        
         # Set parameter list for the Casadi solver
         self.param = ca.vertcat(u_m1, s_N, q, r_s, r_v, c_0, c, o_s, o_d, q_stc, q_dyn)
         #self._w_list.append(ca.vertcat(r_s))
+        '''
+        (x, y, theta) = self.s_0
+        (x_goal, y_goal, theta_goal) = self.s_N
+        (v_init, w_init) = self.u_m1
+        (qpos, qvel, qtheta, rv, rw, qN, qthetaN, qrpd, acc_penalty, w_acc_penalty) = self.q
         
-        #(x, y, theta) = (s_0[0], s_0[1], s_0[2])
-        (x_goal, y_goal, theta_goal) = (s_N[0], s_N[1], s_N[2])
-        (v_init, w_init) = (u_m1[0], u_m1[1])
-        (qpos, qvel, qtheta, rv, rw)                    = (q[0], q[1], q[2], q[3], q[4])
-        (qN, qthetaN, qrpd, acc_penalty, w_acc_penalty) = (q[5], q[6], q[7], q[8], q[9])
-        
-        ref_states = ca.reshape(r_s, (self.ns, self.N)).T
+        ref_states = ca.reshape(self.r_s, (self.ns, self.N)).T
         ref_states = ca.vertcat(ref_states, ref_states[[-1],:])[:, :2] #Remove theta
+        
 
         cost = 0
         penalty_constraints = 0
@@ -204,35 +225,36 @@ class MultipleShootingSolver:
 
             ### Reference deviation costs
             cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
-            cost += mpc_cost.cost_refvalue_deviation(u_t[0], r_v[kt], weight=qvel)              # [cost] refenrence velocity deviation
+            cost += mpc_cost.cost_refvalue_deviation(u_t[0], self.r_v[kt], weight=qvel)              # [cost] refenrence velocity deviation
             cost += mpc_cost.cost_control_actions(u_t.T, weights=ca.horzcat(rv, rw))            # [cost] penalize control actions
 
+            
             ### Fleet collision avoidance
-            other_x_0 = c_0[ ::self.ns] # first  state
-            other_y_0 = c_0[1::self.ns] # second state
+            other_x_0 = self.c_0[ ::self.ns] # first  state
+            other_y_0 = self.c_0[1::self.ns] # second state
             other_robots_0 = ca.hcat([other_x_0, other_y_0]) # states of other robots at time 0
             other_robots_0 = ca.transpose(other_robots_0) # every column is a state of a robot
             cost += mpc_cost.cost_fleet_collision(state[:2].T, other_robots_0.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=1000)
-
+            
             ### Fleet collision avoidance [Predictive]
-            other_robots_x = c[kt*self.ns  ::self.ns*self.N] # first  state
-            other_robots_y = c[kt*self.ns+1::self.ns*self.N] # second state
+            other_robots_x = self.c[kt*self.ns  ::self.ns*self.N] # first  state
+            other_robots_y = self.c[kt*self.ns+1::self.ns*self.N] # second state
             other_robots = ca.hcat([other_robots_x, other_robots_y]) # states of other robots at time kt (Nother*ns)
             other_robots = ca.transpose(other_robots) # every column is a state of a robot
             cost += mpc_cost.cost_fleet_collision(state[:2].T, other_robots.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=10)
-
+            
             ### Static obstacles
             for i in range(self.config.Nstcobs):
-                eq_param = o_s[i*self.config.nstcobs : (i+1)*self.config.nstcobs]
+                eq_param = self.o_s[i*self.config.nstcobs : (i+1)*self.config.nstcobs]
                 n_edges = int(self.config.nstcobs / 3) # 3 means b, a0, a1
-                b, a0, a1 = eq_param[:n_edges], eq_param[n_edges:2*n_edges], eq_param[2*n_edges:]
+                b, a0, a1 = ca.SX(eq_param[:n_edges]), ca.SX(eq_param[n_edges:2*n_edges]), ca.SX(eq_param[2*n_edges:])
 
                 inside_stc_obstacle = mpc_helper.inside_cvx_polygon(state.T, b.T, a0.T, a1.T)
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
 
-                cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=q_stc[kt])
+                cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
             ### Dynamic obstacles
             # x_dyn     = o_d[0::self.config.ndynobs*(self.N_hor+1)]
             # y_dyn     = o_d[1::self.config.ndynobs*(self.N_hor+1)]
@@ -295,7 +317,7 @@ class MultipleShootingSolver:
         cost += ca.mtimes(acc.T, acc)*acc_penalty
         cost += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
         
-
+        #print("Cost",cost)
         return cost
 
     def build_problem(self) -> dict:
@@ -347,7 +369,7 @@ class MultipleShootingSolver:
         constraint_ub_list = self._ubg_list + self._ubh_list
         
         # Added parameters to problem definition
-        self.problem = {'f': J, 'x': ca.vertcat(*self._w_list), 'g': ca.vertcat(*constraint_list), 'p': self.param,
+        self.problem = {'f': J, 'x': ca.vertcat(*self._w_list), 'g': ca.vertcat(*constraint_list),
                         'lbx': self._lbw_list, 'ubx': self._ubw_list,
                         'lbg': constraint_lb_list, 'ubg': constraint_ub_list}
         self._built = True
@@ -369,7 +391,7 @@ class MultipleShootingSolver:
         if not self._built:
             self.build_problem()
         self.problem = cast(dict, self.problem)
-        problem = {k: self.problem[k] for k in ('f', 'x', 'g', 'p')}
+        problem = {k: self.problem[k] for k in ('f', 'x', 'g')}
             
         if solver_options is None:
             solver_options = {}
