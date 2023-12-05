@@ -126,5 +126,5 @@ for kt in range(TIMEOUT):
     
     
 main_plotter.show()
-input('Press anything to finish!')
+input('Press enter to finish!')
 main_plotter.close()

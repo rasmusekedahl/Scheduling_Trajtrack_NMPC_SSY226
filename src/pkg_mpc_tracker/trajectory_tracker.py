@@ -289,10 +289,12 @@ class TrajectoryTracker:
             cost        = solution.cost
             exit_status = solution.exit_status
             solver_time = solution.solve_time_ms
+            print('time: ',solver_time)
             
         elif self.solver_type == 'Casadi':
             cas_solver = CasadiSolver(self.config,self.robot_spec,parameters)
             u, cost, exit_status, solver_time = cas_solver.run()
+            print('time: ',solver_time)
         
         taken_states:List[np.ndarray] = []
         for i in range(take_steps):

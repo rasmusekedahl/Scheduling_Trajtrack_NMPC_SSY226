@@ -84,9 +84,11 @@ class CasadiSolver:
         ms_solver.build_problem()
 
         sol, solver_time, exit_status, solver_cost = ms_solver.solve()
-
-        u_out = [output[0] for output in ms_solver.get_opt_controls(sol)]
-        print("U_out",u_out)
+        
+        u_out_nest = ms_solver.get_opt_controls(sol)
+        
+        # Get the nested list down to a single list representing the input vector
+        u_out = [u_out_nest[j][i] for i in range(len(u_out_nest[0])) for j in range(len(u_out_nest))]
         
         return u_out, solver_cost, exit_status, solver_time
 

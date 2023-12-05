@@ -168,17 +168,16 @@ class MultipleShootingSolver:
         self._ineq_func_list.append(func)
 
     def set_parameters(self,params):
-        self.u_m1= params[0:2]  # Input at kt=-1
-        self.s_0 = params[2:5]  # State at kt=0
-        self.s_N = params[5:8]  # State of goal at kt=N_hor
-        self.q = params[8:18]   # Penalty parameters for objective terms
-        self.r_s = params[18:78] # Reference states
-        self.r_v = params[78:98] # Reference speed
-        self.c_0 = params[98:128]      # States of other robots at kt=0
-        self.c = params[98:728]        # Predicted states of other robots
-        self.o_s = params[728:848]     # Static obstacles
-        self.q_stc = params[848:]      # Static obstacle weights
-
+        self.u_m1= params[0:2]          # Input at kt=-1
+        self.s_0 = params[2:5]          # State at kt=0
+        self.s_N = params[5:8]          # State of goal at kt=N_hor
+        self.q = params[8:18]           # Penalty parameters for objective terms
+        self.r_s = params[18:78]        # Reference states
+        self.r_v = params[78:98]        # Reference speed
+        self.c_0 = params[98:128]       # States of other robots at kt=0
+        self.c = params[98:728]         # Predicted states of other robots
+        self.o_s = params[728:848]      # Static obstacles
+        self.q_stc = params[-40:-20]    # Static obstacle weights
 
     def cost_calculation(self):
         '''
@@ -255,46 +254,11 @@ class MultipleShootingSolver:
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
 
                 cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
-            ### Dynamic obstacles
-            # x_dyn     = o_d[0::self.config.ndynobs*(self.N_hor+1)]
-            # y_dyn     = o_d[1::self.config.ndynobs*(self.N_hor+1)]
-            # rx_dyn    = o_d[2::self.config.ndynobs*(self.N_hor+1)]
-            # ry_dyn    = o_d[3::self.config.ndynobs*(self.N_hor+1)]
-            # As        = o_d[4::self.config.ndynobs*(self.N_hor+1)]
-            # alpha_dyn = o_d[5::self.config.ndynobs*(self.N_hor+1)]
-
-            # inside_dyn_obstacle = mpc_helper.inside_ellipses(state.T, [x_dyn, y_dyn, rx_dyn, ry_dyn, As])
-            # penalty_constraints += cs.fmax(0, inside_dyn_obstacle)
-
-            # ellipse_param = [x_dyn, y_dyn, 
-            #                  rx_dyn+self.robot_config.vehicle_margin+self.robot_config.social_margin, 
-            #                  ry_dyn+self.robot_config.vehicle_margin+self.robot_config.social_margin, 
-            #                  As, alpha_dyn]
-            # cost += mpc_cost.cost_inside_ellipses(state.T, ellipse_param, weight=1000)
-
-            ### Dynamic obstacles [Predictive]
-            # (x, y, rx, ry, angle, alpha) for obstacle 0 for N_hor steps, then similar for obstalce 1 for N_hor steps...
-            # x_dyn     = o_d[(kt+1)*self.config.ndynobs  ::self.config.ndynobs*(self.N_hor+1)]
-            # y_dyn     = o_d[(kt+1)*self.config.ndynobs+1::self.config.ndynobs*(self.N_hor+1)]
-            # rx_dyn    = o_d[(kt+1)*self.config.ndynobs+2::self.config.ndynobs*(self.N_hor+1)]
-            # ry_dyn    = o_d[(kt+1)*self.config.ndynobs+3::self.config.ndynobs*(self.N_hor+1)]
-            # As        = o_d[(kt+1)*self.config.ndynobs+4::self.config.ndynobs*(self.N_hor+1)]
-            # alpha_dyn = o_d[(kt+1)*self.config.ndynobs+5::self.config.ndynobs*(self.N_hor+1)]
-
-            # inside_dyn_obstacle = mpc_helper.inside_ellipses(state.T, [x_dyn, y_dyn, rx_dyn, ry_dyn, As])
-            # penalty_constraints += cs.fmax(0, inside_dyn_obstacle)
-
-            # ellipse_param = [x_dyn, y_dyn, 
-            #                  rx_dyn+self.robot_config.vehicle_margin, 
-            #                  ry_dyn+self.robot_config.vehicle_margin, 
-            #                  As, alpha_dyn]
-            # cost += mpc_cost.cost_inside_ellipses(state.T, ellipse_param, weight=q_dyn[kt])
         
         ### Terminal cost
-        # state_final_goal = cs.vertcat(x_goal, y_goal, theta_goal)
-        # cost += mpc_cost.cost_refstate_deviation(state, state_final_goal, weights=cs.vertcat(qN, qN, qthetaN)) 
+        #state_final_goal = ca.vertcat(x_goal, y_goal, theta_goal)
+        #cost += mpc_cost.cost_refstate_deviation(state, state_final_goal, weights=ca.vertcat(qN, qN, qthetaN)) 
         cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost      
-
         
         ### Max speed bound
         umin = [self.robot_config.lin_vel_min, -self.robot_config.ang_vel_max] * self.N
