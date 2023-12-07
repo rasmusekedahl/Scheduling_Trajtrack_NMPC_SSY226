@@ -128,6 +128,10 @@ class MultipleShootingSolver:
             self._ubx = [ubx] * (self._N+1)
         else:
             self._ubx = ubx
+            
+    def set_stcobs_constraints(self):
+        print('hej')
+        
         
     def set_control_bound(self, lbu: list, ubu: list) -> None:
         """Set the lower and upper bounds of the controls."""
@@ -188,6 +192,8 @@ class MultipleShootingSolver:
         Returns:
             Cost: The total cost function used for the Casadi solver 
         """
+        Cost_dict = {}
+        
         (x, y, theta) = self.s_0
         (x_goal, y_goal, theta_goal) = self.s_N
         (v_init, w_init) = self.u_m1
@@ -198,6 +204,8 @@ class MultipleShootingSolver:
         
 
         cost = 0
+        cost_ref_path = 0
+        
         penalty_constraints = 0
         for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
             
@@ -208,8 +216,9 @@ class MultipleShootingSolver:
             state = self._f_func(state_vec, u_t, self.ts) # Kinematic/dynamic model
 
             ### Reference deviation costs
-            cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
-            cost += mpc_cost.cost_refvalue_deviation(u_t[0], self.r_v[kt], weight=qvel)              # [cost] refenrence velocity deviation
+            cost_ref_path += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
+            cost += mpc_cost.cost_refvalue_deviation(u_t[0], self.r_v[kt], weight=qvel)         # [cost] refenrence velocity deviation
+            cost += mpc_cost.cost_refvalue_deviation(u_t[1], 0, weight=qvel)                    # [cost] Angular velocity usage
             cost += mpc_cost.cost_control_actions(u_t.T, weights=ca.horzcat(rv, rw))            # [cost] penalize control actions
 
             
@@ -242,6 +251,9 @@ class MultipleShootingSolver:
         
         ### Terminal cost
         cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost      
+        cost += cost_ref_path
+        
+        Cost_dict.update({'ref_path': cost_ref_path})
         
         ### Max speed bound
         umin = [self.robot_config.lin_vel_min, -self.robot_config.ang_vel_max] * self.N
@@ -259,13 +271,12 @@ class MultipleShootingSolver:
         acc_max   = [ self.robot_config.lin_acc_max] * self.N
         w_acc_max = [ self.robot_config.ang_acc_max] * self.N
         
-        print('acc: ',acc)
-        
         # Accelerations cost
         cost += ca.mtimes(acc.T, acc)*acc_penalty
         cost += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
         
-        #print("Cost",cost)
+        #print("Cost dict: ", Cost_dict['ref_path'])
+        
         return cost
 
     def build_problem(self) -> dict:
@@ -280,8 +291,6 @@ class MultipleShootingSolver:
         self._lbw_list += self._lbx[0]
         self._ubw_list += self._ubx[0]
         self._g_list.append(self._w_list[0] - self._x0)
-        print(self._w_list[0])
-        print(self._x0)
         self._lbg_list += [0]*self._ns
         self._ubg_list += [0]*self._ns
 
@@ -290,8 +299,7 @@ class MultipleShootingSolver:
         for k in range(self._N):
             x_next = ca.SX.sym('x_' + str(k+1), self._ns)
             u_k = ca.SX.sym('u_' + str(k), self._nu)
-            #x_next_hat, J_k = self._f_func(x_k, u_k)
-            #x_next_hat = self._f_func(x_k,u_k)
+            
             fk = ca.Function('x_next_hat', [x_k,u_k], [self._f_func(x_k,u_k,self.ts)])
             x_next_hat = fk(x_k,u_k)
 
@@ -351,10 +359,9 @@ class MultipleShootingSolver:
         solver = ca.nlpsol('solver', solver_type, problem, solver_options, **build_kwargs)
         sol: dict = solver(lbx=self.problem['lbx'], ubx=self.problem['ubx'],
                            lbg=self.problem['lbg'], ubg=self.problem['ubg'], **run_kwargs)
-        
+        #x0= ca.vertcat(*self._w_list), 
         sol_stats = solver.stats()
         hej = sol_stats
-        print('Hej: ', ca.sum1(sol['g']))
         time = 1000*sol_stats['t_wall_total']
         exit_status = sol_stats['return_status']
         sol_cost = float(sol['f'])

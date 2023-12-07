@@ -296,6 +296,9 @@ class TrajectoryTracker:
             u, cost, exit_status, solver_time = cas_solver.run()
             print('time: ',solver_time)
         
+        else:
+            print('Oh no')
+        
         taken_states:List[np.ndarray] = []
         for i in range(take_steps):
             state_next = self.motion_model(state, np.array(u[(i*self.nu):((i+1)*self.nu)]), self.ts)

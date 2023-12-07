@@ -39,7 +39,7 @@ class CasadiSolver:
             List: List of lists containing boundary coordinates
         """
         ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
-        DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
+        DATA_DIR = os.path.join(ROOT_DIR, "data", "schedule_demo1_data")
         map_path = os.path.join(DATA_DIR, "map.json")
 
         map_data = json.load(open(map_path))
@@ -100,6 +100,7 @@ class CasadiSolver:
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
         ms_solver.set_state_bound([[bounds[0][0],bounds[0][1],-2*cs.pi]]*(self.N+1), 
                                 [[bounds[2][0],bounds[2][1],2*cs.pi]]*(self.N+1))
+        
         ms_solver.build_problem()
 
         sol, solver_time, exit_status, solver_cost = ms_solver.solve()
