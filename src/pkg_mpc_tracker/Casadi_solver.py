@@ -1,6 +1,8 @@
 import sys
 import numpy as np
-# import matplotlib.pyplot as plt # type: ignore
+import os
+import json
+import pathlib
 
 import casadi as cs # type: ignore
 from pkg_mpc_tracker.direct_multiple_shooting import MultipleShootingSolver
@@ -29,10 +31,21 @@ class CasadiSolver:
         # Initial states
         self.x0 = params[2:5]
         self.ref_state = params[5:8]
+
+    def get_state_bounds(self):
+        """Gets the map data from the according json file
+
+        Returns:
+            List: List of lists containing boundary coordinates
+        """
+        ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
+        DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
+        map_path = os.path.join(DATA_DIR, "map.json")
+
+        map_data = json.load(open(map_path))
+               
+        return map_data['boundary_coords']
         
-       
-
-
     def unicycle_model(self, state: cs.SX, action: cs.SX, ts: float, rk4:bool=True) -> cs.SX:
         """Unicycle model.
         
@@ -67,6 +80,12 @@ class CasadiSolver:
     
 
     def run(self):
+        """Run the Casadi solver for the entire horizon
+
+        Returns:
+            Any: A list of optimal control inputs, calulated total cost, 
+            the exit status of the solver and the time it took to run the solver
+        """
         # Define a symbolic continious function
         fk = self.return_continuous_function()
 
@@ -76,15 +95,15 @@ class CasadiSolver:
         ms_solver.set_motion_model(self.unicycle_model,c2d=False)
         ms_solver.set_parameters(self.params)
         
-
+        bounds = self.get_state_bounds()
         # Define state and output bounds
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
-        ms_solver.set_state_bound([[0.0,0.0,0.0]]*(self.N+1), 
-                                [[20.0,20.0,2*cs.pi]]*(self.N+1))
+        ms_solver.set_state_bound([[bounds[0][0],bounds[0][1],-2*cs.pi]]*(self.N+1), 
+                                [[bounds[2][0],bounds[2][1],2*cs.pi]]*(self.N+1))
         ms_solver.build_problem()
 
         sol, solver_time, exit_status, solver_cost = ms_solver.solve()
-        
+        print('Cost: ', solver_cost)
         u_out_nest = ms_solver.get_opt_controls(sol)
         
         # Get the nested list down to a single list representing the input vector

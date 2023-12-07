@@ -168,6 +168,9 @@ class MultipleShootingSolver:
         self._ineq_func_list.append(func)
 
     def set_parameters(self,params):
+        """
+            Set the parameter value of all the help variables such as the reference states.
+        """
         self.u_m1= params[0:2]          # Input at kt=-1
         self.s_0 = params[2:5]          # State at kt=0
         self.s_N = params[5:8]          # State of goal at kt=N_hor
@@ -180,26 +183,11 @@ class MultipleShootingSolver:
         self.q_stc = params[-40:-20]    # Static obstacle weights
 
     def cost_calculation(self):
-        '''
-        #u = ca.SX.sym('u', self.nu*self.N)  # 0. Inputs from 0 to N_hor-1
+        """Calculates the cost function using the states and inputs to minimize the cost:
 
-        u_m1 = ca.SX.sym('u_m1', self.nu)       # 1. Input at kt=-1
-        #s_0 = ca.SX.sym('s_0', self.ns)         # 2. State at kt=0
-        s_N = ca.SX.sym('s_N', self.ns)         # 3. State of goal at kt=N_hor
-        q = ca.SX.sym('q', self.config.nq)      # 4. Penalty parameters for objective terms
-        r_s = ca.SX.sym('r_s', self.ns*self.N)  # 5. Reference states
-        r_v = ca.SX.sym('r_v', self.N)          # 6. Reference speed
-        c_0 = ca.SX.sym('c_0', self.ns*self.config.Nother)          # 7. States of other robots at kt=0
-        c = ca.SX.sym('c', self.ns*self.N*self.config.Nother)   # 8. Predicted states of other robots
-        o_s = ca.SX.sym('os', self.config.Nstcobs*self.config.nstcobs)                  # 9. Static obstacles
-        #o_d = ca.SX.sym('od', self.config.Ndynobs*self.config.ndynobs*(self.N+1))   # 10. Dynamic obstacles
-        q_stc = ca.SX.sym('qstc', self.N)               # 11. Static obstacle weights
-        #q_dyn = ca.SX.sym('qdyn', self.N)               # 12. Dynamic obstacle weights
-        
-        # Set parameter list for the Casadi solver
-        self.param = ca.vertcat(u_m1, s_N, q, r_s, r_v, c_0, c, o_s, o_d, q_stc, q_dyn)
-        #self._w_list.append(ca.vertcat(r_s))
-        '''
+        Returns:
+            Cost: The total cost function used for the Casadi solver 
+        """
         (x, y, theta) = self.s_0
         (x_goal, y_goal, theta_goal) = self.s_N
         (v_init, w_init) = self.u_m1
@@ -211,15 +199,12 @@ class MultipleShootingSolver:
 
         cost = 0
         penalty_constraints = 0
-        #state = ca.vcat([x,y,theta])
         for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
-            #state = ca.SX.sym('x_' + str(kt+1), self._ns)
+            
             state_vec = self._w_list[2*kt]
-            #u_t = ca.SX.sym('u_' + str(kt), self._nu)
             u_t = self._w_list[2*kt+1]
             
             ### Run step with motion model
-            #u_t = u[kt*self.nu:(kt+1)*self.nu]  # inputs at time t
             state = self._f_func(state_vec, u_t, self.ts) # Kinematic/dynamic model
 
             ### Reference deviation costs
@@ -256,27 +241,26 @@ class MultipleShootingSolver:
                 cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
         
         ### Terminal cost
-        #state_final_goal = ca.vertcat(x_goal, y_goal, theta_goal)
-        #cost += mpc_cost.cost_refstate_deviation(state, state_final_goal, weights=ca.vertcat(qN, qN, qthetaN)) 
         cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost      
         
         ### Max speed bound
         umin = [self.robot_config.lin_vel_min, -self.robot_config.ang_vel_max] * self.N
         umax = [self.robot_config.lin_vel_max,  self.robot_config.ang_vel_max] * self.N
-        bounds = og.constraints.Rectangle(umin, umax)
-
+        
         ### Acceleration bounds and cost
         v = u_t[0::2] # velocity
         w = u_t[1::2] # angular velocity
         acc   = (v-ca.vertcat(v_init, v[0:-1]))/self.ts
         w_acc = (w-ca.vertcat(w_init, w[0:-1]))/self.ts
-        acc_constraints = ca.vertcat(acc, w_acc)
+        
         # Acceleration bounds
         acc_min   = [ self.robot_config.lin_acc_min] * self.N 
         w_acc_min = [-self.robot_config.ang_acc_max] * self.N
         acc_max   = [ self.robot_config.lin_acc_max] * self.N
         w_acc_max = [ self.robot_config.ang_acc_max] * self.N
-        acc_bounds = og.constraints.Rectangle(acc_min + w_acc_min, acc_max + w_acc_max)
+        
+        print('acc: ',acc)
+        
         # Accelerations cost
         cost += ca.mtimes(acc.T, acc)*acc_penalty
         cost += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
@@ -369,10 +353,11 @@ class MultipleShootingSolver:
                            lbg=self.problem['lbg'], ubg=self.problem['ubg'], **run_kwargs)
         
         sol_stats = solver.stats()
+        hej = sol_stats
+        print('Hej: ', ca.sum1(sol['g']))
         time = 1000*sol_stats['t_wall_total']
         exit_status = sol_stats['return_status']
         sol_cost = float(sol['f'])
-        print(type(sol_cost))
         return sol, time, exit_status, sol_cost
     
     def get_pred_states(self, sol: dict) -> list[list[float]]:
