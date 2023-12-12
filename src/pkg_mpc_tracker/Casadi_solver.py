@@ -78,6 +78,21 @@ class CasadiSolver:
         fk = cs.Function('fk', [x,u], [f])
         return fk
     
+    def individual_cost(self, Cost_dict: dict, varialbes: cs.SX, state: list, input: list):
+
+        #Get a list of 3 states and 2 inputs for N
+        merge_list = state[:3]
+        for i in range(self.N):
+            merge_list += input[2*(i):2*(i)+2]
+            merge_list += state[3*(i+1):3*(i+1)+3]
+
+        #Calc individual costs
+        for key, value in Cost_dict.items():
+            cost_ind = cs.Function(key,[varialbes],[value])
+            print(key,' : ', cost_ind(merge_list))
+        #ref_path_cost = cs.Function('test',[varialbes],[Cost_dict['ref_path']])
+        #print('ref_path',ref_path_cost(merge_list))
+    
 
     def run(self):
         """Run the Casadi solver for the entire horizon
@@ -101,14 +116,21 @@ class CasadiSolver:
         ms_solver.set_state_bound([[bounds[0][0],bounds[0][1],-2*cs.pi]]*(self.N+1), 
                                 [[bounds[2][0],bounds[2][1],2*cs.pi]]*(self.N+1))
         
-        ms_solver.build_problem()
+        problem, Cost_dict =  ms_solver.build_problem()
 
         sol, solver_time, exit_status, solver_cost = ms_solver.solve()
-        print('Cost: ', solver_cost)
-        u_out_nest = ms_solver.get_opt_controls(sol)
-        
-        # Get the nested list down to a single list representing the input vector
-        u_out = [u_out_nest[j][i] for i in range(len(u_out_nest[0])) for j in range(len(u_out_nest))]
+        print('Total Cost: ', solver_cost)
+     
+        u_out_nest = ms_solver.get_opt_controls(sol) #Returns 2 lists with each input for the horizon
+        x_pred_nest = ms_solver.get_pred_states(sol)
+
+      # Get the nested list down to a single list representing the input vector
+        u_out = [u_out_nest[j][i] for i in range(len(u_out_nest[0])) for j in range(len(u_out_nest))] # Merging columns instead of rows for each step in N
+
+        #Calculate individual costs
+        x_pred = [x_pred_nest[j][i] for i in range(len(x_pred_nest[0])) for j in range(len(x_pred_nest))]
+        self.individual_cost(Cost_dict, problem['x'], x_pred, u_out)
+
         
         return u_out, solver_cost, exit_status, solver_time
 

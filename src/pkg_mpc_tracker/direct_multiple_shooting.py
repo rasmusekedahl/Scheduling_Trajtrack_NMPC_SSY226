@@ -202,11 +202,21 @@ class MultipleShootingSolver:
         ref_states = ca.reshape(self.r_s, (self.ns, self.N)).T
         ref_states = ca.vertcat(ref_states, ref_states[[-1],:])[:, :2] #Remove theta
         
-
+        #Intialize all costs
         cost = 0
         cost_ref_path = 0
-        
+        cost_refvalue_deviation_v = 0
+        cost_refvalue_deviation_w = 0
         penalty_constraints = 0
+        cost_control_actions = 0
+        cost_fleet_collision = 0
+        cost_fleet_collision_pred = 0
+        cost_static_obstacles = 0
+        Terminal_cost = 0
+        cost_linear_acc = 0
+        cost_angular_acc = 0
+
+
         for kt in range(0, self.N): # LOOP OVER PREDICTIVE HORIZON
             
             state_vec = self._w_list[2*kt]
@@ -217,9 +227,9 @@ class MultipleShootingSolver:
 
             ### Reference deviation costs
             cost_ref_path += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
-            cost += mpc_cost.cost_refvalue_deviation(u_t[0], self.r_v[kt], weight=qvel)         # [cost] refenrence velocity deviation
-            cost += mpc_cost.cost_refvalue_deviation(u_t[1], 0, weight=qvel)                    # [cost] Angular velocity usage
-            cost += mpc_cost.cost_control_actions(u_t.T, weights=ca.horzcat(rv, rw))            # [cost] penalize control actions
+            cost_refvalue_deviation_v += mpc_cost.cost_refvalue_deviation(u_t[0], self.r_v[kt], weight=qvel)         # [cost] refenrence velocity deviation
+            cost_refvalue_deviation_w += mpc_cost.cost_refvalue_deviation(u_t[1], 0, weight=qvel)                    # [cost] Angular velocity usage
+            cost_control_actions += mpc_cost.cost_control_actions(u_t.T, weights=ca.horzcat(rv, rw))            # [cost] penalize control actions
 
             
             ### Fleet collision avoidance
@@ -227,7 +237,7 @@ class MultipleShootingSolver:
             other_y_0 = self.c_0[1::self.ns] # second state
             other_robots_0 = ca.hcat([other_x_0, other_y_0]) # states of other robots at time 0
             other_robots_0 = ca.transpose(other_robots_0) # every column is a state of a robot
-            cost += mpc_cost.cost_fleet_collision(state[:2].T, other_robots_0.T, 
+            cost_fleet_collision += mpc_cost.cost_fleet_collision(state[:2].T, other_robots_0.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=1000)
             
             ### Fleet collision avoidance [Predictive]
@@ -235,7 +245,7 @@ class MultipleShootingSolver:
             other_robots_y = self.c[kt*self.ns+1::self.ns*self.N] # second state
             other_robots = ca.hcat([other_robots_x, other_robots_y]) # states of other robots at time kt (Nother*ns)
             other_robots = ca.transpose(other_robots) # every column is a state of a robot
-            cost += mpc_cost.cost_fleet_collision(state[:2].T, other_robots.T, 
+            cost_fleet_collision_pred += mpc_cost.cost_fleet_collision(state[:2].T, other_robots.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=10)
             
             ### Static obstacles
@@ -247,13 +257,10 @@ class MultipleShootingSolver:
                 inside_stc_obstacle = mpc_helper.inside_cvx_polygon(state.T, b.T, a0.T, a1.T)
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
 
-                cost += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
+                cost_static_obstacles += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
         
         ### Terminal cost
-        cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost      
-        cost += cost_ref_path
-        
-        Cost_dict.update({'ref_path': cost_ref_path})
+        Terminal_cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost  
         
         ### Max speed bound
         umin = [self.robot_config.lin_vel_min, -self.robot_config.ang_vel_max] * self.N
@@ -272,12 +279,26 @@ class MultipleShootingSolver:
         w_acc_max = [ self.robot_config.ang_acc_max] * self.N
         
         # Accelerations cost
-        cost += ca.mtimes(acc.T, acc)*acc_penalty
-        cost += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
+        cost_linear_acc += ca.mtimes(acc.T, acc)*acc_penalty
+        cost_angular_acc += ca.mtimes(w_acc.T, w_acc)*w_acc_penalty
+
+         ### Add all costs     
+        cost = cost_ref_path + cost_refvalue_deviation_v + cost_refvalue_deviation_w + cost_control_actions + cost_fleet_collision + cost_fleet_collision_pred + cost_static_obstacles + Terminal_cost + cost_linear_acc + cost_angular_acc
         
-        #print("Cost dict: ", Cost_dict['ref_path'])
-        
-        return cost
+        ### Add all costs to dictionary
+        Cost_dict.update({'ref_path': cost_ref_path})
+        Cost_dict.update({'v_input_deviation': cost_refvalue_deviation_v})
+        Cost_dict.update({'w_input_deviation': cost_refvalue_deviation_w})
+        Cost_dict.update({'control_action': cost_control_actions})
+        Cost_dict.update({'fleet_collision': cost_fleet_collision})
+        Cost_dict.update({'fleet_collision_predictive': cost_fleet_collision_pred})
+        Cost_dict.update({'static_obstacles': cost_static_obstacles})
+        Cost_dict.update({'Terminal_cost': Terminal_cost})
+        Cost_dict.update({'linear_acceleration': cost_linear_acc})
+        Cost_dict.update({'angular_acceleration': cost_angular_acc})
+
+                
+        return cost, Cost_dict
 
     def build_problem(self) -> dict:
         """Build the NLP problem in the form of multiple shooting.
@@ -319,7 +340,7 @@ class MultipleShootingSolver:
            
             x_k = x_next
         
-        J = self.cost_calculation()
+        J, Cost_dict = self.cost_calculation()
         constraint_list = self._g_list + self._h_list
         constraint_lb_list = self._lbg_list + self._lbh_list
         constraint_ub_list = self._ubg_list + self._ubh_list
@@ -329,7 +350,7 @@ class MultipleShootingSolver:
                         'lbx': self._lbw_list, 'ubx': self._ubw_list,
                         'lbg': constraint_lb_list, 'ubg': constraint_ub_list}
         self._built = True
-        return self.problem
+        return self.problem, Cost_dict
 
     # Solver option will supress printout from the solver if not None
     def solve(self, solver_type:str='ipopt', solver_options:Optional[dict]={'ipopt.print_level':0, 'print_time':5},
