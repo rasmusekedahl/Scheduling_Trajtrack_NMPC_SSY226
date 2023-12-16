@@ -74,6 +74,7 @@ class MpcInterface:
         if map_updated:
             stc_constraints, closest_obstacle_list = self.get_stc_constraints()
         dyn_constraints = self.get_dyn_constraints(full_dyn_obstacle_list)
+        
         actions, pred_states, current_refs, cost = self.traj_tracker.run_step(stc_constraints, dyn_constraints, other_robot_states)
         self._pred_states = pred_states
         return actions, pred_states, cost, closest_obstacle_list, current_refs

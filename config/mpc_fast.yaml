@@ -28,7 +28,7 @@ qpos: 0.0               # Cost for position deviation each time step to the refe
 qvel: 5.0              # Cost for speed    deviation each time step to the reference
 qtheta: 2.0             # Cost for heading  deviation each time step to the reference
 # Obstacle avoidance weights
-qstcobs: 100.0          # Cost for static obstacle avoidance
+qstcobs: 100.0         # Cost for static obstacle avoidance
 qdynobs: 10.0          # Cost for dynamic obstacle avoidance
 # Terminal weights
 qpN: 0.0                # Terminal cost; error relative to final reference position         

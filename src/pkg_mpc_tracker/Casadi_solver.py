@@ -12,7 +12,7 @@ from pkg_mpc_tracker.build import mpc_cost
 
 
 class CasadiSolver:
-    def __init__(self, config, robot_specification, params):
+    def __init__(self, config, robot_specification, params, initial_guess):
         # Define control parameters 
         self.config = config
         self.robot_spec = robot_specification
@@ -21,6 +21,9 @@ class CasadiSolver:
         self.N = self.config.N_hor   #Control horizon
         self.ts = self.config.ts    #Sample time
         self.params = params
+
+        #Test
+        self.initial_guess = initial_guess
 
         ### State bounds of the robot
         self.lin_vel_min = self.robot_spec.lin_vel_min   # Vehicle contraint on the minimal velocity possible
@@ -105,7 +108,7 @@ class CasadiSolver:
         fk = self.return_continuous_function()
 
         # Discretize the continious function 
-        ms_solver = MultipleShootingSolver(self.ns, self.nu, self.ts, self.N, self.config,self.robot_spec)
+        ms_solver = MultipleShootingSolver(self.ns, self.nu, self.ts, self.N, self.config,self.robot_spec,self.initial_guess)
         ms_solver.set_initial_state(self.x0)
         ms_solver.set_motion_model(self.unicycle_model,c2d=False)
         ms_solver.set_parameters(self.params)
@@ -115,6 +118,8 @@ class CasadiSolver:
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
         ms_solver.set_state_bound([[bounds[0][0],bounds[0][1],-2*cs.pi]]*(self.N+1), 
                                 [[bounds[2][0],bounds[2][1],2*cs.pi]]*(self.N+1))
+        
+    
         
         problem, Cost_dict =  ms_solver.build_problem()
 
@@ -131,8 +136,15 @@ class CasadiSolver:
         x_pred = [x_pred_nest[j][i] for i in range(len(x_pred_nest[0])) for j in range(len(x_pred_nest))]
         self.individual_cost(Cost_dict, problem['x'], x_pred, u_out)
 
+        #Get the next intial guess list
+        initial_guess = []
+        for i in range(0, len(x_pred), self.ns):
+            initial_guess.extend(x_pred[i:i+self.ns])
+            if i // self.ns < len(u_out):
+                initial_guess.extend(u_out[i//self.ns * self.nu : i//self.ns * self.nu + self.nu])
+
         
-        return u_out, solver_cost, exit_status, solver_time
+        return u_out, solver_cost, exit_status, solver_time, initial_guess
 
 
 

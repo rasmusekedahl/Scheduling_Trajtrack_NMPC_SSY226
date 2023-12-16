@@ -36,7 +36,7 @@ class MultipleShootingSolver:
         A variable with a subscript `_i` means it is a symbol, not a value (e.g. `x_0`).
         A variable with a number `i` means it is a value, not a symbol (e.g. `x0`). 
     """
-    def __init__(self, ns: int, nu: int, ts: float, horizon: int, config, robot_specification) -> None:
+    def __init__(self, ns: int, nu: int, ts: float, horizon: int, config, robot_specification, initial_guess) -> None:
         """
         Arguments:
             ns: number of states
@@ -49,9 +49,10 @@ class MultipleShootingSolver:
         self._N = horizon
         self.config = config
         self.robot_config = robot_specification
+        self.initial_guess = initial_guess
 
         self._create_placeholders()
-        self._x0: Any = None
+        self._x0: Any = None    #Check this one out
         self._f_func: Any = None
         self._lbx = [[-ca.inf]*self._ns]*(self._N+1)
         self._ubx = [[ ca.inf]*self._ns]*(self._N+1)
@@ -256,7 +257,6 @@ class MultipleShootingSolver:
 
                 inside_stc_obstacle = mpc_helper.inside_cvx_polygon(state.T, b.T, a0.T, a1.T)
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
-
                 cost_static_obstacles += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
         
         ### Terminal cost
@@ -354,7 +354,7 @@ class MultipleShootingSolver:
 
     # Solver option will supress printout from the solver if not None
     def solve(self, solver_type:str='ipopt', solver_options:Optional[dict]={'ipopt.print_level':0, 'print_time':5},
-              build_kwargs:Optional[dict]=None, run_kwargs:Optional[dict]=None) -> dict:
+              build_kwargs:Optional[dict]=None, run_kwargs:Optional[dict]=None) -> None:
         """Solve the NLP problem.
         
         Arguments:
@@ -369,20 +369,20 @@ class MultipleShootingSolver:
             self.build_problem()
         self.problem = cast(dict, self.problem)
         problem = {k: self.problem[k] for k in ('f', 'x', 'g')}
-            
+
+
         if solver_options is None:
             solver_options = {}
         if build_kwargs is None:
-            build_kwargs = {}
+            build_kwargs ={}
         if run_kwargs is None:
-            run_kwargs = {}
+            run_kwargs = {} 
 
+        print(self.initial_guess) 
         solver = ca.nlpsol('solver', solver_type, problem, solver_options, **build_kwargs)
-        sol: dict = solver(lbx=self.problem['lbx'], ubx=self.problem['ubx'],
-                           lbg=self.problem['lbg'], ubg=self.problem['ubg'], **run_kwargs)
-        #x0= ca.vertcat(*self._w_list), 
+        sol: dict = solver(x0 = self.initial_guess, lbx=self.problem['lbx'], ubx=self.problem['ubx'],
+                           lbg=self.problem['lbg'], ubg=self.problem['ubg'],**run_kwargs)
         sol_stats = solver.stats()
-        hej = sol_stats
         time = 1000*sol_stats['t_wall_total']
         exit_status = sol_stats['return_status']
         sol_cost = float(sol['f'])

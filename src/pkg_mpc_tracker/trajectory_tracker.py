@@ -49,6 +49,7 @@ class TrajectoryTracker:
         self._idle = True
         self._obstacle_weights()
         self.set_work_mode(mode='safe')
+        self.next_initial_guess = []
 
         self.__import_solver(use_tcp=use_tcp)
 
@@ -292,8 +293,9 @@ class TrajectoryTracker:
             print('time: ',solver_time)
             
         elif self.solver_type == 'Casadi':
-            cas_solver = CasadiSolver(self.config,self.robot_spec,parameters)
-            u, cost, exit_status, solver_time = cas_solver.run()
+            cas_solver = CasadiSolver(self.config,self.robot_spec,parameters,self.next_initial_guess)
+            u, cost, exit_status, solver_time, next_initial_guess = cas_solver.run()
+            self.next_initial_guess = next_initial_guess
             print('time: ',solver_time)
         
         else:
