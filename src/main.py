@@ -19,7 +19,6 @@ from visualizer.mpc_plot import MpcPlotInLoop
 
 ROOT_DIR = pathlib.Path(__file__).resolve().parents[1]
 # DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
-DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
 CNFG_DIR = os.path.join(ROOT_DIR, "config")
 VB = False
 TIMEOUT = 1000
@@ -33,6 +32,7 @@ config_robot_path = os.path.join(CNFG_DIR, "robot_spec.yaml")
 config_mpc = MpcConfiguration.from_yaml(config_mpc_path)
 config_robot = CircularRobotSpecification.from_yaml(config_robot_path)
 
+DATA_DIR = os.path.join(ROOT_DIR, "data", config_mpc.map_folder)
 ### Map, graph, and schedule paths
 map_path = os.path.join(DATA_DIR, "map.json")
 graph_path = os.path.join(DATA_DIR, "graph.json")

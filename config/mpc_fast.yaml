@@ -40,3 +40,4 @@ build_directory: 'mpc_solver'   # Name of the directory where the build is creat
 bad_exit_codes: ["NotConvergedIterations", "NotConvergedOutOfTime"] # Optimizer specific names, otherwise "Converged"
 optimizer_name: 'navi_fast'    # optimizer name
 solver_type: 'Casadi'         # PANOC or Casadi
+map_folder: 'test_data'

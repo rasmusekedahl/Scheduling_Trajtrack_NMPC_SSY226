@@ -129,9 +129,6 @@ class MultipleShootingSolver:
             self._ubx = [ubx] * (self._N+1)
         else:
             self._ubx = ubx
-            
-    def set_stcobs_constraints(self):
-        print('hej')
         
         
     def set_control_bound(self, lbu: list, ubu: list) -> None:
@@ -144,6 +141,9 @@ class MultipleShootingSolver:
             self._ubu = [ubu] * self._N
         else:
             self._ubu = ubu
+            
+    def set_stcobs_constraints(self, stc_obs):
+        self.nr_stc_obs = len(stc_obs)
 
     def set_motion_model(self, func: Union[ca.Function, Callable], c2d:bool=False, sub_sampling:int=0) -> None:
         """Set the motion model of the system, which should be a mapping:
@@ -249,7 +249,8 @@ class MultipleShootingSolver:
             cost_fleet_collision_pred += mpc_cost.cost_fleet_collision(state[:2].T, other_robots.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=10)
             
-            ### Static obstacles
+            ### Static obstacles (Added in the inequility constraint now)
+            
             for i in range(self.config.Nstcobs):
                 eq_param = self.o_s[i*self.config.nstcobs : (i+1)*self.config.nstcobs]
                 n_edges = int(self.config.nstcobs / 3) # 3 means b, a0, a1
@@ -258,7 +259,7 @@ class MultipleShootingSolver:
                 inside_stc_obstacle = mpc_helper.inside_cvx_polygon(state.T, b.T, a0.T, a1.T)
                 penalty_constraints += ca.fmax(0, ca.vertcat(inside_stc_obstacle))
                 cost_static_obstacles += mpc_cost.cost_inside_cvx_polygon(state.T, b.T, a0.T, a1.T, weight=self.q_stc[kt])
-        
+            
         ### Terminal cost
         Terminal_cost += qN*((state[0]-x_goal)**2 + (state[1]-y_goal)**2) + qthetaN*(state[2]-theta_goal)**2 # terminated cost  
         
@@ -332,18 +333,25 @@ class MultipleShootingSolver:
             self._lbg_list += [0]*self._ns
             self._ubg_list += [0]*self._ns
 
-            for ineq_func in self._ineq_func_list:
-                self._h_list += [ineq_func(x_k, u_k)]
-                self._lbh_list += [-ca.inf]
-                self._ubh_list += [0]
+            # Add first all x for N, then all y for N. Then all again
+            for i in range(self.nr_stc_obs):
+                eq_param = self.o_s[i*self.config.nstcobs : (i+1)*self.config.nstcobs]
+                n_edges = int(self.config.nstcobs / 3) # 3 means b, a0, a1
+                b, a0, a1 = ca.SX(eq_param[:n_edges]), ca.SX(eq_param[n_edges:2*n_edges]), ca.SX(eq_param[2*n_edges:])
+                
+                self._h_list.append(mpc_helper.outside_cvx_polygon(ca.SX(x_next).T, b.T, a0.T, a1.T))
 
-           
             x_k = x_next
+            
+        lower_vehicle_margin = self.robot_config.vehicle_width/2 + self.robot_config.vehicle_margin
+        self._lbh_list += [0.01] * (self.N*self.nr_stc_obs)
+        self._ubh_list += [ca.inf] * (self.N*self.nr_stc_obs)
         
         J, Cost_dict = self.cost_calculation()
         constraint_list = self._g_list + self._h_list
         constraint_lb_list = self._lbg_list + self._lbh_list
         constraint_ub_list = self._ubg_list + self._ubh_list
+        
         
         # Added parameters to problem definition
         self.problem = {'f': J, 'x': ca.vertcat(*self._w_list), 'g': ca.vertcat(*constraint_list),
@@ -378,11 +386,12 @@ class MultipleShootingSolver:
         if run_kwargs is None:
             run_kwargs = {} 
 
-        print(self.initial_guess) 
         solver = ca.nlpsol('solver', solver_type, problem, solver_options, **build_kwargs)
         sol: dict = solver(x0 = self.initial_guess, lbx=self.problem['lbx'], ubx=self.problem['ubx'],
                            lbg=self.problem['lbg'], ubg=self.problem['ubg'],**run_kwargs)
         sol_stats = solver.stats()
+        print('Initial guess: ', self.initial_guess)
+        print('ineq constraints: ',sol['g'][-20:])
         time = 1000*sol_stats['t_wall_total']
         exit_status = sol_stats['return_status']
         sol_cost = float(sol['f'])

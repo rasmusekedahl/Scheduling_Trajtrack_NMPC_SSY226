@@ -50,8 +50,9 @@ class TrajectoryTracker:
         self._obstacle_weights()
         self.set_work_mode(mode='safe')
         self.next_initial_guess = []
-
-        self.__import_solver(use_tcp=use_tcp)
+        
+        if self.solver_type == 'PANOC':
+            self.__import_solver(use_tcp=use_tcp)
 
     def __import_solver(self, root_dir:str='', use_tcp:bool=False):
         self.use_tcp = use_tcp
@@ -279,8 +280,9 @@ class TrajectoryTracker:
         Comments:
             The motion model (dynamics) is defined initially.
         """
-        if self.use_tcp:
-            return self.run_solver_tcp(parameters, state, take_steps)
+        if self.solver_type == 'PANOC':
+            if self.use_tcp:
+                return self.run_solver_tcp(parameters, state, take_steps)
 
         if self.solver_type == 'PANOC':
             import opengen as og

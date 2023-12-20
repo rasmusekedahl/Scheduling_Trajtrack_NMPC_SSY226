@@ -34,6 +34,20 @@ class CasadiSolver:
         # Initial states
         self.x0 = params[2:5]
         self.ref_state = params[5:8]
+        
+    def get_map_data(self):
+        """Gets the map data from the according json file
+
+        Returns:
+            List: List of lists containing boundary coordinates
+        """
+        ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
+        DATA_DIR = os.path.join(ROOT_DIR, "data", self.config.map_folder)
+        map_path = os.path.join(DATA_DIR, "map.json")
+
+        map_data = json.load(open(map_path))
+               
+        return map_data
 
     def get_state_bounds(self):
         """Gets the map data from the according json file
@@ -113,12 +127,13 @@ class CasadiSolver:
         ms_solver.set_motion_model(self.unicycle_model,c2d=False)
         ms_solver.set_parameters(self.params)
         
-        bounds = self.get_state_bounds()
+        map = self.get_map_data()
+        bounds = map['boundary_coords']
         # Define state and output bounds
         ms_solver.set_control_bound([self.lin_vel_min, self.ang_vel_min], [self.lin_vel_max, self.ang_vel_max])
         ms_solver.set_state_bound([[bounds[0][0],bounds[0][1],-2*cs.pi]]*(self.N+1), 
                                 [[bounds[2][0],bounds[2][1],2*cs.pi]]*(self.N+1))
-        
+        ms_solver.set_stcobs_constraints(map['obstacle_list'])
     
         
         problem, Cost_dict =  ms_solver.build_problem()
@@ -142,6 +157,8 @@ class CasadiSolver:
             initial_guess.extend(x_pred[i:i+self.ns])
             if i // self.ns < len(u_out):
                 initial_guess.extend(u_out[i//self.ns * self.nu : i//self.ns * self.nu + self.nu])
+        initial_guess = initial_guess[5:]
+        initial_guess.extend(initial_guess[-5:])
 
         
         return u_out, solver_cost, exit_status, solver_time, initial_guess
