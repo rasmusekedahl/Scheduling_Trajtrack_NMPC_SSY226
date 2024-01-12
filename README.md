@@ -27,7 +27,11 @@ python src/build_solver.py
 After this, a new directory *mpc_solver* will appear and contain the solver. Then, you are good to go :)
 
 ## Use Case
-Run *main.py* for ... 
+Run *main.py* for test case of scheduler together with MPC controllers.
+
+Video of the system can be found here:
+
+https://drive.google.com/file/d/1fkuoXjIjBDj_-13mcDz48p3XoTMzA8DJ/view?usp=sharing
 
 ## ROS Simulation
 [ROS XXX](https://github.com/) [Not Yet]
