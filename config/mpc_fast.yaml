@@ -23,7 +23,7 @@ lin_vel_penalty: 0      # Cost for linear velocity control action (should be 0)
 lin_acc_penalty: 1.0   # Cost for linear acceleration 
 ang_vel_penalty: 0      # Cost angular velocity control action
 ang_acc_penalty: 2.0   # Cost angular acceleration
-qrpd: 5.0             # Cost for reference path deviation
+qrpd: 100.0             # Cost for reference path deviation
 qpos: 0.0               # Cost for position deviation each time step to the reference
 qvel: 5.0              # Cost for speed    deviation each time step to the reference
 qtheta: 2.0             # Cost for heading  deviation each time step to the reference
@@ -39,5 +39,5 @@ build_type: 'release'           # Can have 'debug' or 'release'
 build_directory: 'mpc_solver'   # Name of the directory where the build is created
 bad_exit_codes: ["NotConvergedIterations", "NotConvergedOutOfTime"] # Optimizer specific names, otherwise "Converged"
 optimizer_name: 'navi_fast'    # optimizer name
-solver_type: 'Casadi'         # PANOC or Casadi
-map_folder: 'test_data'
+solver_type: 'PANOC'         # PANOC or Casadi
+map_folder: 'Offline_schedule_test'

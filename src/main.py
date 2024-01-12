@@ -1,7 +1,7 @@
 import os
 import json
 import pathlib
-
+import sys
 import numpy as np
 
 from basic_motion_model.motion_model import UnicycleModel
@@ -17,13 +17,19 @@ from configs import CircularRobotSpecification
 from visualizer.object import CircularVehicleVisualizer
 from visualizer.mpc_plot import MpcPlotInLoop
 
+
+#Import offline scheduler
+if ".\src\pkg_scheduler\sp_comsat" not in sys.path:
+    sys.path.append(".\src\pkg_scheduler\sp_comsat")
+from Scheduler import SchedulerConfig, Scheduler
+
 ROOT_DIR = pathlib.Path(__file__).resolve().parents[1]
 # DATA_DIR = os.path.join(ROOT_DIR, "data", "test_data")
 CNFG_DIR = os.path.join(ROOT_DIR, "config")
 VB = False
 TIMEOUT = 1000
 
-robot_ids = None # if none, read from schedule
+robot_ids = None # if none, read from schedule                                                                                                
 
 ### Configurations
 config_mpc_path = os.path.join(CNFG_DIR, "mpc_fast.yaml")
@@ -31,17 +37,35 @@ config_robot_path = os.path.join(CNFG_DIR, "robot_spec.yaml")
 
 config_mpc = MpcConfiguration.from_yaml(config_mpc_path)
 config_robot = CircularRobotSpecification.from_yaml(config_robot_path)
-
-DATA_DIR = os.path.join(ROOT_DIR, "data", config_mpc.map_folder)
-### Map, graph, and schedule paths
+#"src/pkg_scheduler/sp_comsat/output", 'MM_16_4_4_1'
+#DATA_DIR = os.path.join(ROOT_DIR, "src/pkg_scheduler/sp_comsat/output", 'MM_16_4_4_1')
+DATA_DIR = os.path.join(ROOT_DIR, "src\pkg_scheduler\sp_comsat\output")
+#DATA_DIR = os.path.join(ROOT_DIR, "data/test_data")
+#DATA_DIR = os.path.join(ROOT_DIR, "data", "schedule_demo1_data")
+### Map, graph, and schedule paths                                     
 map_path = os.path.join(DATA_DIR, "map.json")
 graph_path = os.path.join(DATA_DIR, "graph.json")
 schedule_path = os.path.join(DATA_DIR, "schedule.csv")
 start_path = os.path.join(DATA_DIR, "robot_start.json")
+
+### Set up scheduler
+
+# Create a scheduler object
+scheduler = Scheduler(SchedulerConfig(dir=DATA_DIR))
+
+# set new problem to solve
+problem_filename = "MM_16_4_4_1.0_7000_150.json"
+if scheduler.set_problem_filename(problem_filename) == False:
+    print(f"Invalid filename.\n")
+    os.abort()
+
+scheduler.schedule()                        # Run the entire scheduling process and generates schedule.csv
+scheduler.generate_graph_for_mpc()          # Generate graph.json file required by mpc
+scheduler.generate_robot_start_for_mpc()    # Generates a robot_start.json file required by mpc
+
 with open(start_path, "r") as f:
     robot_starts = json.load(f)
 
-### Set up scheduler
 scheduler = JobScheduler.from_csv(schedule_path)
 robot_ids = scheduler.robot_ids if robot_ids is None else robot_ids
 
@@ -63,7 +87,7 @@ for rid in robot_ids:
 ### Run
 main_plotter = MpcPlotInLoop(config_robot)
 main_plotter.plot_in_loop_pre(planner.current_map, planner.current_graph)
-color_list = ["b", "r", "g"]
+color_list = ["b", "r", "g","y"]
 for i, rid in enumerate(robot_ids):
     planner = robot_manager.get_planner(rid)
     controller = robot_manager.get_controller(rid)

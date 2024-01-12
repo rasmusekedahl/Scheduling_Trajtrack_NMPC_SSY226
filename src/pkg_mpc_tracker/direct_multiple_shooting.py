@@ -240,7 +240,7 @@ class MultipleShootingSolver:
             other_robots_0 = ca.transpose(other_robots_0) # every column is a state of a robot
             cost_fleet_collision += mpc_cost.cost_fleet_collision(state[:2].T, other_robots_0.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=1000)
-            
+ 
             ### Fleet collision avoidance [Predictive]
             other_robots_x = self.c[kt*self.ns  ::self.ns*self.N] # first  state
             other_robots_y = self.c[kt*self.ns+1::self.ns*self.N] # second state
@@ -343,8 +343,8 @@ class MultipleShootingSolver:
 
             x_k = x_next
             
-        lower_vehicle_margin = self.robot_config.vehicle_width/2 + self.robot_config.vehicle_margin
-        self._lbh_list += [0.01] * (self.N*self.nr_stc_obs)
+        lower_vehicle_margin = self.robot_config.vehicle_width/2 + self.robot_config.vehicle_margin 
+        self._lbh_list += [lower_vehicle_margin] * (self.N*self.nr_stc_obs)
         self._ubh_list += [ca.inf] * (self.N*self.nr_stc_obs)
         
         J, Cost_dict = self.cost_calculation()
@@ -390,8 +390,6 @@ class MultipleShootingSolver:
         sol: dict = solver(x0 = self.initial_guess, lbx=self.problem['lbx'], ubx=self.problem['ubx'],
                            lbg=self.problem['lbg'], ubg=self.problem['ubg'],**run_kwargs)
         sol_stats = solver.stats()
-        print('Initial guess: ', self.initial_guess)
-        print('ineq constraints: ',sol['g'][-20:])
         time = 1000*sol_stats['t_wall_total']
         exit_status = sol_stats['return_status']
         sol_cost = float(sol['f'])

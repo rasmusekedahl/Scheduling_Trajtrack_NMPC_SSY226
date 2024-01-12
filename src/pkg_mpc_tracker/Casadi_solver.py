@@ -42,7 +42,7 @@ class CasadiSolver:
             List: List of lists containing boundary coordinates
         """
         ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
-        DATA_DIR = os.path.join(ROOT_DIR, "data", self.config.map_folder)
+        DATA_DIR = os.path.join(ROOT_DIR, "data/test_data")
         map_path = os.path.join(DATA_DIR, "map.json")
 
         map_data = json.load(open(map_path))
@@ -56,7 +56,7 @@ class CasadiSolver:
             List: List of lists containing boundary coordinates
         """
         ROOT_DIR = pathlib.Path(__file__).resolve().parents[2]
-        DATA_DIR = os.path.join(ROOT_DIR, "data", "schedule_demo1_data")
+        DATA_DIR = os.path.join(ROOT_DIR,"data/test_data")
         map_path = os.path.join(DATA_DIR, "map.json")
 
         map_data = json.load(open(map_path))
@@ -149,7 +149,7 @@ class CasadiSolver:
 
         #Calculate individual costs
         x_pred = [x_pred_nest[j][i] for i in range(len(x_pred_nest[0])) for j in range(len(x_pred_nest))]
-        self.individual_cost(Cost_dict, problem['x'], x_pred, u_out)
+        #self.individual_cost(Cost_dict, problem['x'], x_pred, u_out)
 
         #Get the next intial guess list
         initial_guess = []

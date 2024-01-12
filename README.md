@@ -19,7 +19,7 @@ The NMPC formulation is solved using open source implementation of PANOC, namely
 pip install -r requirements.txt
 ```
 
-### Generate MPC solver
+### Generate MPC solver for PANOC
 Go to "build_solver.py", change the configuration files to what you want and run
 ```
 python src/build_solver.py

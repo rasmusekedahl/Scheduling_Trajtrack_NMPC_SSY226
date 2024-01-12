@@ -1,0 +1,70 @@
+{
+    "robots": [
+        {
+            "name": "0",
+            "tasks": [
+                {
+                    "name": "task_0",
+                    "path": [
+                        {
+                            "name": "14",
+                            "pre": [],
+                            "time": 0
+                        },
+                        {
+                            "name": "13",
+                            "pre": [],
+                            "time": 4
+                        }
+                    ],
+                    "status": "pending"
+                },
+                {
+                    "name": "task_1",
+                    "path": [
+                        {
+                            "name": "3",
+                            "pre": [],
+                            "time": 12
+                        }
+                    ],
+                    "status": "pending"
+                }
+            ],
+            "is_busy": false
+        },
+        {
+            "name": "1",
+            "tasks": [
+                {
+                    "name": "task_3",
+                    "path": [
+                        {
+                            "name": "2",
+                            "pre": [],
+                            "time": 0
+                        }
+                    ],
+                    "status": "pending"
+                },
+                {
+                    "name": "task_2",
+                    "path": [
+                        {
+                            "name": "1",
+                            "pre": [],
+                            "time": 4
+                        },
+                        {
+                            "name": "10",
+                            "pre": [],
+                            "time": 12
+                        }
+                    ],
+                    "status": "pending"
+                }
+            ],
+            "is_busy": false
+        }
+    ]
+}

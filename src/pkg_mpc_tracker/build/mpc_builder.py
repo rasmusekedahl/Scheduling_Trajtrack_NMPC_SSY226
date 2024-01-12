@@ -81,7 +81,7 @@ class MpcModule:
             cost += mpc_cost.cost_refpath_deviation(state.T, ref_states[kt:, :], weight=qrpd)   # [cost] reference path deviation cost
             cost += mpc_cost.cost_refvalue_deviation(u_t[0], r_v[kt], weight=qvel)              # [cost] refenrence velocity deviation
             cost += mpc_cost.cost_control_actions(u_t.T, weights=cs.horzcat(rv, rw))            # [cost] penalize control actions
-
+            
             ### Fleet collision avoidance
             other_x_0 = c_0[ ::self.ns] # first  state
             other_y_0 = c_0[1::self.ns] # second state
@@ -97,7 +97,7 @@ class MpcModule:
             other_robots = cs.transpose(other_robots) # every column is a state of a robot
             cost += mpc_cost.cost_fleet_collision(state[:2].T, other_robots.T, 
                                                   safe_distance=2*(self.robot_config.vehicle_width+self.robot_config.vehicle_margin), weight=10)
-
+            
             ### Static obstacles
             for i in range(self.config.Nstcobs):
                 eq_param = o_s[i*self.config.nstcobs : (i+1)*self.config.nstcobs]
